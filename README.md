@@ -648,7 +648,7 @@ Recall: 78.95%
 
 # Conclusions
 
-<p align="justify">-  	Machine learning can used to successfully predict the outcomes of sports fixtures with a high degree of accuracy, if good data is available. </p>
+<p align="justify">-  	Machine learning can be used to successfully predict the outcomes of sports fixtures with a high degree of accuracy, if good data is available. </p>
 <p align="justify">-  	Web scraping is a very effective technique for creating datasets in order to predict the results of matches.  </p>
 <p align="justify">-  	There are many other complex strategies that could be used to try to beat the models in this project, for example scraping in-game data rather than using moving averages alone.  </p>
 <p align="justify">-  	Decision-tree and ensemble/boosted models are very effective at this type of predictive modelling, especially if the data contains categorical variables.  </p>

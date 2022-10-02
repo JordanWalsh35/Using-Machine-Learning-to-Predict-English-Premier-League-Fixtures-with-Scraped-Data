@@ -515,7 +515,7 @@ Accuracy: 65.48%
 Precision: 66.07%  
 Recall: 43.02%  
 [92,   19]  
- [49,   37]]
+ [49,   37]
 <br/>
 
 <p align="justify"> This improved the accuracy to 65.48%. Now the model is starting to perform really well in comparison to where we started. We also have a good precision score of 66.07% and a recall score of 43.02%. </p>

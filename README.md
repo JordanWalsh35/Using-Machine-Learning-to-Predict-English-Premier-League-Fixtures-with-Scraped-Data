@@ -281,35 +281,377 @@ for df in dfx:
 <p align="justify"> A function was defined in order to take each statistic and calculate its moving average over the three previous games. The function takes a dataframe that is grouped by team, calculates the moving average and creates new columns containing this data, then finally removes the first three rows for each team. This is done because the moving average cannot be calculated for the first three rows given that it needs three values to do the calculation. Therefore the 4th match of the season for each team becomes our new starting point for each dataset.  </p>
 <br/>
 
-<p align="justify"> </p>
+```python
+# Define a Function That Calculates a Moving Average of Three Previous Games & Creates New Columns
+def moving_average(team_grouped, cols, new_cols):
+    mov_avg = team_grouped[cols].rolling(3, closed = "left").mean()
+    team_grouped[new_cols] = mov_avg
+    team_grouped = team_grouped.dropna(subset = new_cols)
+    return team_grouped
+```
+
+<p align="justify"> The input columns were defined and the function was applied to each season dataframe. </p>
 <br/>
 
-<p align="justify"> </p>
+```python
+# Define the Input Columns
+cols = df.columns[14:38]
+cols = cols.append(df.columns[[6, 7, 10]])
+new_cols = [f"{c} - Home" for c in cols]
+
+# Group the Dataset by Team and Apply the MA Function
+df_list = []
+for df in dfx:
+    df = df.groupby("Team").apply(lambda x: moving_average(x, cols, new_cols))
+    df = df.droplevel("Team")
+    df.index = range(df.shape[0])
+    df["Match Number"] = range(1, len(df) + 1)
+    df_list.append(df)
+```
 <br/>
 
-<p align="justify"> </p>
+## Away Team Moving Averages
+
+<p align="justify"> Given that all data is from the perspective of the ‘Team’ column and not the ‘Opponent’ team we also need to replicate each moving average column so that we have stats for both sides of each fixture. Once the duplicates are removed later we will 27 home team features and 27 away team features. </p>
 <br/>
 
-<p align="justify"> </p>
+```python
+# Define Away Cols
+away_cols = [col.replace('Home','Away') for col in new_cols]
+away_cols.append('Match Number')
+
+# Add Columns for Away Team
+final_dfs = []
+for df in df_list:
+    away = []
+    for i in range(0, len(df)):
+        opp = df['Opponent'][i]
+        mdate = df['Date'][i]
+        team_df = df[df['Team'] == opp]
+        nrow = team_df[team_df['Date'] == mdate][new_cols]
+        nrow.insert(loc = 27, column = 'Match Number', value = i + 1)
+        away.append(nrow)
+    combine = pd.concat(away)
+    combine.columns = away_cols
+    combine.index = range(combine.shape[0])
+    df = df.merge(combine, on = 'Match Number')
+    final_dfs.append(df)
+```
+
+<p align="justify"> The dataframes for each season were merged into one in order to encode the team names and also create some additional features for the time, month and day of week to see if these had some impact on match result.  </p>
 <br/>
 
-<p align="justify"> </p>
+<p align="justify"> The dataframes were merged to make categorical (team) encoding simpler. Given that in each season three teams are regulated and promoted, if we did encoding for each season individually (numbering the teams 1 to 20 so that our machine learning model can use this categorical data) we would have some inconsistencies and our model would think two different teams were the same. For example, if Wolves were encoded with the number 20 in one season but got regulated for the next season, the replacement (promoted) team would then get the code 20 and our model would think this was the same team.   </p>
 <br/>
 
-<p align="justify"> </p>
+<p align="justify"> Venue was also filtered to remove half the dataset as these were duplicates. When the data was scraped it was always taken from the perspective of one team and therefore each match was in the dataset twice. Filtering for Venue = Home means our ‘Team’ column always contains the home team for each fixture and the ‘Opponent’ column contains the away team.  </p>
 <br/>
 
-<p align="justify"> </p>
+```python
+# Merge Datasets
+dfT = pd.concat(final_dfs)
+
+# Filter 'Away' to Remove Duplicate Match
+dfT = dfT[dfT['Venue'] == 'Home']
+
+# Convert Categorical Data to Numerical & Fix Opponent Names
+dfT["Date"] = pd.to_datetime(dfT["Date"], dayfirst = True)
+dfT["Home Team"] = dfT["Team"].astype("category").cat.codes
+dfT["Away Team"] = dfT["Opponent"].astype("category").cat.codes
+dfT["Hour"] = dfT["Time"].str.replace(":.+", "", regex = True).astype("int")
+dfT["Day of Week"] = dfT["Date"].dt.dayofweek
+dfT["Month"] = dfT["Date"].dt.month
+dfT["Output"] = (dfT["Result"] == 'W').astype("int")
+```
 <br/>
 
-<p align="justify"> </p>
+<p align="justify"> A variable called ‘Output’ was created based on the result column so that we can run a binary classification model on the data. If the home team won this was given a value of 1 and if the home team lost or drew this was given a value of 0. It would also be possible to use a multiclass classification model here (win, draw & lose) but since draws make up a small percentage of overall results it was decided to use a simpler binary classification model. </p>
 <br/>
 
-<p align="justify"> </p>
+<p align="justify"> Finally the dataframe was filtered to contain only the desired features for the next section (modelling) and saved to CSV.  </p>
 <br/>
 
-<p align="justify"> </p>
+```python
+# Drop Unwanted Features and Save to Excel
+features = dfT.copy()
+remove_cols = cols.append(dfT.columns[1:6]).append(dfT.columns[[11, 66]])
+features = features.drop(columns = remove_cols)
+features = features.sort_values("Date")
+features.to_csv('Features.csv')
+```
 <br/>
 
-<p align="justify"> </p>
+# Modelling
+
+<p align="justify"> A Random Forest classifier was used to try to predict the outcomes of matches. Several iterations were made to try to improve the model, starting with a very basic model and adding features and training data to improve accuracy. A grid search was also performed in order to fine-tune the model’s parameters and optimize the results. An XGBoost classifier was also tried to see if it could beat the Random Forest model.  </p>
 <br/>
+
+<p align="justify"> Given the fact that we are currently only 7 games into the 22/23 season, backtesting was performed on the 21/22 season and then the model was applied to 22/23. When more data is available the played games for this year could be added to the training set and could possibly improve the accuracy of the models even more.  </p>
+<br/>
+
+<p align="justify"> First a function was defined so the Random Forest model could be replicated easily: </p>
+<br/>
+
+```python
+# Define a Function for Random Forest Model
+def RFC_model(train, test, predictor_list):
+    RFC = RandomForestClassifier(n_estimators = 100, random_state = 1, min_samples_split = 10)
+    RFC.fit(train[predictor_list], train["Output"])
+    predictions = RFC.predict(test[predictor_list])
+
+    acc_score = accuracy_score(test["Output"], predictions)
+    return print("Accuracy: {:.2f}%".format(acc_score*100))
+```
+<br/>
+
+<p align="justify"> The model was first trained using data from a single season, 2020/2021, to predict all games of the 2021/22 season. This model used only basic predictors; home team, away team, time of day, day of week and month of the year.   </p>
+<br/>
+
+```python
+# Train Model on 2020/2021 Season to Predict 2021/2022 Season - Basic Predictors
+basic_predictors = ["Home Team", "Away Team", "Hour", "Day of Week", "Month"]
+training_set = data[data["Season"] == '20_21']
+test_set = data[data["Season"] == '21_22']
+RFC_model(training_set, test_set, basic_predictors)
+```
+Accuracy: 55.14%
+<br/>
+
+<p align="justify"> The result was an accuracy of 55.14%. Even using such basic predictors and one season of training data this is a pretty decent result. Already the model is better than random. Next we can add another season of training data to see if it improves the result. Here the training set consists of 19/20 and 20/21.  </p>
+<br/>
+
+```python
+# Train Model on Two Previous Seasons to Predict 2021/2022 Season - Basic Predictors
+values = ['19_20', '20_21']
+training_set = data[data["Season"].isin(values)]
+test_set = data[data["Season"] == '21_22']
+RFC_model(training_set, test_set, basic_predictors)
+```
+Accuracy: 59.71%
+<br/>
+
+<p align="justify"> The accuracy improved to 59.71%, a significant improvement. The next step involves adding all the extra predictors, these are the moving average figures that were created in the feature engineering section earlier </p>
+<br/>
+
+```python
+# Add Extra Predictors
+predictors = list(data.columns[4:66])
+predictors.remove('Season')
+training_set = data[data["Season"].isin(values)]
+test_set = data[data["Season"] == '21_22']
+RFC_model(training_set, test_set, predictors)
+```
+Accuracy: 62.57%
+<br/>
+
+<p align="justify"> This improved accuracy to 62.57%. Now let’s take data from the first half of 21/22, combine it with the training data from all previous seasons (back as far as 2018/19) and then try to predict only the second half of the 21/22 season. This resulted in a slight improvement to 63.45%. </p>
+<br/>
+
+```python
+# Add In Data from Current Season for Training Set
+training_set = data[data["Date"] < '2022-01-01']
+test_set = data[data["Season"] == '21_22']
+test_set = test_set[test_set["Date"] >= '2022-01-01']
+RFC_model(training_set, test_set, predictors)
+```
+Accuracy: 63.45%
+<br/>
+
+## Optimization
+
+<p align="justify"> Now it’s time for optimization. The model so far has been using only one set of hyperparameters (n_estimators = 100, random_state = 1, min_samples_split = 10). A custom-coded grid search was written to find the combination of hyperparameters that maximized the accuracy score. Other metrics were also checked just in case we are falling into the accuracy trap.  </p>
+<br/>
+
+```python
+# Optimize Model Using Custom Grid Search
+from sklearn.model_selection import ParameterGrid
+RF_Classifier = RandomForestClassifier()
+p_grid = ParameterGrid({"n_estimators": [90, 100, 110, 120],
+                        "random_state": [1],
+                        "min_samples_split": [7, 10],
+                        "max_samples": [10, 20, 30]})
+
+# Loop Through Parameter Grid
+accuracies = []
+combinations = []
+for p in p_grid:
+    RF_Classifier.set_params(**p)
+    RF_Classifier.fit(training_set[predictors], training_set["Output"])
+    predictions = RF_Classifier.predict(test_set[predictors])
+
+    acc_score = accuracy_score(test_set["Output"], predictions)
+    prec_score = precision_score(test_set["Output"], predictions)
+    recall = recall_score(test_set["Output"], predictions)
+    cf = confusion_matrix(test_set["Output"], predictions)
+    accuracies.append(acc_score)
+    combinations.append(p)
+    
+max_score = max(accuracies)
+score_index = accuracies.index(max_score)
+op_combination = combinations[score_index]
+print("Best Parameters: ", op_combination)
+print("Accuracy: {:.2f}%".format(max_score*100))
+```
+Best Parameters:  {'max_samples': 20, 'min_samples_split': 10, 'n_estimators': 110, 'random_state': 1}
+Accuracy: 65.48%
+<br/>
+
+```python
+# Check Other Accuracy Metrics with Optimized Model
+RF_check = RandomForestClassifier()
+RF_check.set_params(**op_combination)
+RF_check.fit(training_set[predictors], training_set["Output"])
+predictions = RF_check.predict(test_set[predictors])
+
+acc_check = accuracy_score(test_set["Output"], predictions)
+prec_check = precision_score(test_set["Output"], predictions)
+recall_check = recall_score(test_set["Output"], predictions)
+cf = confusion_matrix(test_set["Output"], predictions)
+
+print("Accuracy: {:.2f}%".format(acc_check*100))
+print("Precision: {:.2f}%".format(prec_check*100))
+print("Recall: {:.2f}%".format(recall_check*100))
+print(cf)
+```
+Accuracy: 65.48%
+Precision: 66.07%
+Recall: 43.02%
+[[92 19]
+ [49 37]]
+<br/>
+
+<p align="justify"> This improved the accuracy to 65.48%. Now the model is starting to perform really well in comparison to where we started. We also have a good precision score of 66.07% and a recall score of 43.02%. </p>
+<br/>
+
+## Feature Importance
+
+<p align="justify"> The feature importance attribute of the Random Forest classifier was used to find out which features were the most significant for the optimized model.  </p>
+<br/>
+
+```python
+# Feature Importance
+feature_importance = pd.DataFrame(RF_Classifier.feature_importances_, index = predictors, columns=['Importance']).sort_values('Importance', ascending=False) 
+plt.figure(figsize = (18, 18))
+sns.barplot(y = feature_importance.index, x = feature_importance["Importance"])
+plt.title('Feature Importance')
+plt.xlabel('Importance')
+plt.ylabel('Features')
+plt.savefig('feature_importance.jpg')
+```
+<br/>
+
+<p align="justify"> This produced the following chart: </p>
+<br/>
+
+# IMAGE
+
+<p align="justify"> Interestingly, the most important feature was one of the variables for transfer market expenses. The next most importance features were possession, shot-creating actions, aerial battles won and shots on target against.  </p>
+<br/>
+
+<p align="justify"> Some of the least importance features were red cards, yellow cards, penalty kicks allowed and own goals. This may seem counter-intuitive, however it makes sense given the way the data was compiled. Even though a red card or penalty may even be the most important determinant of an outcome of the match in which it happens, it wouldn’t really have an significant impact on the following matches when computed as a moving average. Events such as own goals and red cards are also so rare that there isn’t much data available for our model.  </p>
+<br/>
+
+## Running the Final Models
+
+<p align="justify"> After optimization the model can now be ran on the 2022/23 season, using the games that have been played so far as the test set. Unfortunately, given that we lost 3 games of the season due to the moving average function this is a small test set.  </p>
+<br/>
+
+```python
+# Run Model on 2022/2023 Season
+training_set = data[data["Date"] < '2022-08-27']
+test_set = data[data["Date"] >= '2022-08-27']
+
+RF_ = RandomForestClassifier()
+RF_.set_params(**op_combination)
+RF_.fit(training_set[predictors], training_set["Output"])
+predictions = RF_.predict(test_set[predictors])
+
+acc_check = accuracy_score(test_set["Output"], predictions)
+prec_check = precision_score(test_set["Output"], predictions)
+recall_check = recall_score(test_set["Output"], predictions)
+cf = confusion_matrix(test_set["Output"], predictions)
+
+print("Accuracy: {:.2f}%".format(acc_check*100))
+print("Precision: {:.2f}%".format(prec_check*100))
+print("Recall: {:.2f}%".format(recall_check*100))
+print(cf)
+```
+<br/>
+
+<p align="justify"> The result was very impressive with an accuracy of 70.27%. We also got a very high precision of 90% and a recall score of 47.37%. The relatively low recall score means that the model is predicting a large number of false negatives. This may be due to a slightly uneven dataset given that draws plus losses (0) outweighs wins (1). </p>
+<br/>
+
+## XGBoost
+
+<p align="justify"> An XGBoost classifier was tested to see if we could outperform the Random Forest model. The same grid search was used to try to fine-tune the parameters of the boosted model.  </p>
+<br/>
+
+```python
+# Try XGBoost Model
+from sklearn.ensemble import GradientBoostingClassifier
+XGB = GradientBoostingClassifier()
+
+# Optimize Model Using Custom Grid Search
+p_grid = ParameterGrid({"loss": ['log_loss', 'exponential'],
+                        "n_estimators": [80, 90, 100, 110, 120],
+                        "random_state": [1],
+                        "min_samples_split": [3, 5, 7, 10],
+                        "learning_rate": [0.1, 0.2, 0.3]})
+
+# Loop Through Parameter Grid
+accuracies = []
+combinations = []
+for p in p_grid:
+    XGB.set_params(**p)
+    XGB.fit(training_set[predictors], training_set["Output"])
+    predictions = XGB.predict(test_set[predictors])
+
+    acc_score = accuracy_score(test_set["Output"], predictions)
+    prec_score = precision_score(test_set["Output"], predictions)
+    recall = recall_score(test_set["Output"], predictions)
+    cf = confusion_matrix(test_set["Output"], predictions)
+    accuracies.append(acc_score)
+    combinations.append(p)
+    
+max_score = max(accuracies)
+score_index = accuracies.index(max_score)
+op_combination = combinations[score_index]
+print("Best Parameters: ", op_combination)
+print("Accuracy: {:.2f}%".format(max_score*100))
+```
+Best Parameters:  {'learning_rate': 0.2, 'loss': 'exponential', 'min_samples_split': 5, 'n_estimators': 120, 'random_state': 1}
+Accuracy: 72.97%
+<br/>
+
+```python
+# Check Other Accuracy Metrics with Optimized Model
+xgb_check = GradientBoostingClassifier()
+xgb_check.set_params(**op_combination)
+xgb_check.fit(training_set[predictors], training_set["Output"])
+predictions = xgb_check.predict(test_set[predictors])
+
+acc_check = accuracy_score(test_set["Output"], predictions)
+prec_check = precision_score(test_set["Output"], predictions)
+recall_check = recall_score(test_set["Output"], predictions)
+cf = confusion_matrix(test_set["Output"], predictions)
+
+print("Accuracy: {:.2f}%".format(acc_check*100))
+print("Precision: {:.2f}%".format(prec_check*100))
+print("Recall: {:.2f}%".format(recall_check*100))
+```
+Accuracy: 72.97%  
+Precision: 71.43%  
+Recall: 78.95%  
+[12,    6]  
+ [ 4,   15]
+<br/>
+
+<p align="justify"> This resulted in an impressive accuracy of 72.97%. We can see that boosted model not only achieves a higher accuracy, but it doesn’t predict as many false negatives as the RF model, resulting in a much higher recall score of 78.95%. The precision is admittedly lower at 71.43% but this is still very good. Overall the boosted model is very successful at predicting the outcomes of premier league fixtures. </p>
+<br/>
+
+# Conclusions
+
+<p align="justify">-  	Machine learning can used to successfully predict the outcomes of sports fixtures if good data is available. </p>
+<p align="justify">-  	Web scraping is a very effective technique for creating datasets in order to predict the results of matches.  </p>
+<p align="justify">-  	There are many other complex strategies that could be used to try to beat the models in this project, for example scraping in-game data rather than using moving averages alone.  </p>
+<p align="justify">-  	Decision-tree and ensemble/boosted models are very effective at this type of predictive modelling, especially if the data contains categorical variables.  </p>

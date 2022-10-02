@@ -1,6 +1,3 @@
-# Using-Machine-Learning-to-Predict-English-Premier-League-Fixtures-with-Scraped-Data
-<p align="justify"> Using web scraping and machine learning classification models to predict to outcome of fixtures in the English Premier League. </p> 
-<br/>
 
 # Overview  
 
@@ -11,7 +8,9 @@
 
 Data was scraped from two different sources using the ***Requests*** library in Python and the HTML was parsed using ***BeautifulSoup***. The data for Premier League fixtures and team statistics was scraped from [FBref.com](https://fbref.com/en/comps/9/Premier-League-Stats), while another website called [TransferMarkt](https://www.transfermarkt.co.uk/) was used to scrape data on teams’ transfer expenses for each season. Transfer data was not available on FBref and it was desirable to see if this is also a significant predictor of match outcomes.  
 
-<p align="justify"> The following code was used to find the fixtures table for each season. The only input that changes is the curr_season value and the rest of the code runs dynamically. 
+### 1) Scraping Team Links From FBref
+
+<p align="justify"> The following code was used to find the fixtures table for each season on FBref. The only input that changes is the curr_season value and the rest of the code runs dynamically. 
  </p>
 <br/>
 
@@ -50,11 +49,14 @@ pre = 'https://fbref.com'
 team_links = [pre + link for link in team_links]
 ```
 
-<p align="justify">The table for each season looks like this: </p>
+<p align="justify">An example of a season table can be seen below. The links for each team can be taken from this table so that we can later loop through each team link to get the team-specific stats. </p>
 <br/>
-# IMAGE
 
-<p align="justify">The links for each team can be taken from this fixtures table so that we can later loop through each team link to get the team-specific stats. The next section of code scrapes data from TransferMarkt, parses it, cleans it and stores it in a dataframe for later use. </p>
+![](EPL-Images/table.PNG)
+
+### 2) Scraping Transfer Data 
+
+<p align="justify"> The next section of code scrapes data from TransferMarkt, parses it, cleans it and stores it in a dataframe for later use. </p>
 <br/>
 
 ```python
@@ -101,14 +103,16 @@ for i in range(0, 20):
 <p align="justify"> The webpage for each season contains tables for each team, their transfers for that season and the amount spent and received. The expenditure for each team was isolated in the script, an example of which can be seen below. </p>
 <br/>
 
-# IMAGE
+![](EPL-Images/transfers.PNG)
+
+### 3) Scraping Team Statistics and Combining Data
 
 <p align="justify"> Finally, we loop through each team on FBref to collect the bulk of the data. Here’s an example of what the Scores & Fixtures table looks like for each team: </p>
 <br/>
 
-# IMAGE
+![](EPL-Images/scores_fixtures.PNG)
 
-<p align="justify"> This scores and fixtures table is scraped to give us the team’s fixtures for the season, the results of matches that have already been played and some other stats such as goals scored, goals against, possession and more. Above the Scores & Fixtures table there is also more links to other stats tables such as Shooting, Goalkeeping, Passing etc. These links were also scraped with a loop that was written to pass through each link, scrape the data for each table and combined these in a dataframe for each team.  </p>
+<p align="justify"> This scores and fixtures table is scraped to give us the team’s fixtures for the season, the results of matches that have already been played and some other stats such as goals scored, goals against, possession and more. Above the Scores & Fixtures table there is also more links to other stats tables such as Shooting, Goalkeeping, Passing etc. These links were also scraped with a loop that was written to pass through each link, scrape the data for each table and combine these into a dataframe for each team.  </p>
 <br/>
 
 <p align="justify"> Given the large number of features in the raw data it was necessary to filter the data as many of these variables were of no use. This was done manually by selecting 24 features that were deemed to have the potential to have some impact on match results. Some examples include shots, shots on target, passes completed, possession, types of passes, defensive actions, penalties and free kicks. The full list can be seen in the code below or in the Excel files. </p>
@@ -195,20 +199,21 @@ for df in dfx:
         if df[col].isnull().values.any():
             print(get_name(df), col)
 ```
-df18_19 SoT%
-df18_19 G/SoT
-df18_19 Avg. Distance of Shots
-df18_19 Save%
-df19_20 G/SoT
-df19_20 Save%
-df20_21 SoT%
-df20_21 G/SoT
-df20_21 Avg. Distance of Shots
-df20_21 Save%
-df21_22 G/SoT
-df21_22 Save%
-df22_23 G/SoT
-df22_23 Save%
+Output:  
+df18_19 SoT%  
+df18_19 G/SoT  
+df18_19 Avg. Distance of Shots  
+df18_19 Save%  
+df19_20 G/SoT  
+df19_20 Save%  
+df20_21 SoT%  
+df20_21 G/SoT  
+df20_21 Avg. Distance of Shots  
+df20_21 Save%  
+df21_22 G/SoT  
+df21_22 Save%  
+df22_23 G/SoT  
+df22_23 Save%  
 
 <p align="justify"> There was indeed some missing data but it can be deduced from the listed variables that contain missing entries that this was for technical reasons rather than data not being available. For example, in some matches a team may not take any shots and therefore could not have a value for Shot on Target (SoT) or Goals per Shot on Target (G/SoT). If this was the case then the values were simply imputed with a zero. The check was done again after imputation and found no missing values. </p>
 <br/>
@@ -243,7 +248,6 @@ for df in dfx:
 # Feature Engineering
 
 <p align="justify"> The names in the lists of opponent teams were slightly different from the list of home teams in some cases and needed to be mapped by using a dictionary. This was the case for certain clubs with names that could be spelled differently, for example Newcastle Utd instead of Newcastle United or Wolves instead of Wolverhampton Wanderers.  </p>
-<br/>
 
 <p align="justify"> The following code performed this mapping and also created two new variables, one that indicated the season and another for the transfer expenses of the away team. Therefore we can have one column for the home team transfer expenses and another for the away team’s transfer expenses.  </p>
 <br/>
@@ -273,10 +277,8 @@ for df in dfx:
 ## Creating Moving Averages
 
 <p align="justify"> The data cannot be used for machine learning in its current form because it only tells us how a team performed during a given match. If we want to be able to predict the outcome of a match we will not have this data available to us until after the match has ended. Therefore we need to create moving averages for each relevant statistic, which capture the past performance of the team over the previous games.  </p>
-<br/>
 
 <p align="justify"> For example, if we take the shots on target metric, when predicting the outcome for an upcoming game it makes sense to look at how many shots on target the team managed in its three previous games. This type of moving average metric helps to give us a measure of their ‘form’ in recent matches.  </p>
-<br/>
 
 <p align="justify"> A function was defined in order to take each statistic and calculate its moving average over the three previous games. The function takes a dataframe that is grouped by team, calculates the moving average and creates new columns containing this data, then finally removes the first three rows for each team. This is done because the moving average cannot be calculated for the first three rows given that it needs three values to do the calculation. Therefore the 4th match of the season for each team becomes our new starting point for each dataset.  </p>
 <br/>
@@ -312,7 +314,7 @@ for df in dfx:
 
 ## Away Team Moving Averages
 
-<p align="justify"> Given that all data is from the perspective of the ‘Team’ column and not the ‘Opponent’ team we also need to replicate each moving average column so that we have stats for both sides of each fixture. Once the duplicates are removed later we will 27 home team features and 27 away team features. </p>
+<p align="justify"> Given that all data is from the perspective of the ‘Team’ column and not the ‘Opponent’ team we also need to replicate each moving average column so that we have stats for both sides of each fixture. We will then have 27 home team features and 27 away team features. </p>
 <br/>
 
 ```python
@@ -339,10 +341,8 @@ for df in df_list:
 ```
 
 <p align="justify"> The dataframes for each season were merged into one in order to encode the team names and also create some additional features for the time, month and day of week to see if these had some impact on match result.  </p>
-<br/>
 
 <p align="justify"> The dataframes were merged to make categorical (team) encoding simpler. Given that in each season three teams are regulated and promoted, if we did encoding for each season individually (numbering the teams 1 to 20 so that our machine learning model can use this categorical data) we would have some inconsistencies and our model would think two different teams were the same. For example, if Wolves were encoded with the number 20 in one season but got regulated for the next season, the replacement (promoted) team would then get the code 20 and our model would think this was the same team.   </p>
-<br/>
 
 <p align="justify"> Venue was also filtered to remove half the dataset as these were duplicates. When the data was scraped it was always taken from the perspective of one team and therefore each match was in the dataset twice. Filtering for Venue = Home means our ‘Team’ column always contains the home team for each fixture and the ‘Opponent’ column contains the away team.  </p>
 <br/>
@@ -366,7 +366,6 @@ dfT["Output"] = (dfT["Result"] == 'W').astype("int")
 <br/>
 
 <p align="justify"> A variable called ‘Output’ was created based on the result column so that we can run a binary classification model on the data. If the home team won this was given a value of 1 and if the home team lost or drew this was given a value of 0. It would also be possible to use a multiclass classification model here (win, draw & lose) but since draws make up a small percentage of overall results it was decided to use a simpler binary classification model. </p>
-<br/>
 
 <p align="justify"> Finally the dataframe was filtered to contain only the desired features for the next section (modelling) and saved to CSV.  </p>
 <br/>
@@ -384,10 +383,8 @@ features.to_csv('Features.csv')
 # Modelling
 
 <p align="justify"> A Random Forest classifier was used to try to predict the outcomes of matches. Several iterations were made to try to improve the model, starting with a very basic model and adding features and training data to improve accuracy. A grid search was also performed in order to fine-tune the model’s parameters and optimize the results. An XGBoost classifier was also tried to see if it could beat the Random Forest model.  </p>
-<br/>
 
 <p align="justify"> Given the fact that we are currently only 7 games into the 22/23 season, backtesting was performed on the 21/22 season and then the model was applied to 22/23. When more data is available the played games for this year could be added to the training set and could possibly improve the accuracy of the models even more.  </p>
-<br/>
 
 <p align="justify"> First a function was defined so the Random Forest model could be replicated easily: </p>
 <br/>
@@ -430,7 +427,7 @@ RFC_model(training_set, test_set, basic_predictors)
 Accuracy: 59.71%
 <br/>
 
-<p align="justify"> The accuracy improved to 59.71%, a significant improvement. The next step involves adding all the extra predictors, these are the moving average figures that were created in the feature engineering section earlier </p>
+<p align="justify"> The accuracy improved to 59.71%, a significant improvement. The next step involves adding all the extra predictors, these are the moving average figures that were created in the feature engineering section earlier. </p>
 <br/>
 
 ```python
@@ -455,6 +452,7 @@ test_set = test_set[test_set["Date"] >= '2022-01-01']
 RFC_model(training_set, test_set, predictors)
 ```
 Accuracy: 63.45%
+<br/>
 <br/>
 
 ## Optimization
@@ -492,7 +490,7 @@ op_combination = combinations[score_index]
 print("Best Parameters: ", op_combination)
 print("Accuracy: {:.2f}%".format(max_score*100))
 ```
-Best Parameters:  {'max_samples': 20, 'min_samples_split': 10, 'n_estimators': 110, 'random_state': 1}
+Best Parameters:  {'max_samples': 20, 'min_samples_split': 10, 'n_estimators': 110, 'random_state': 1}  
 Accuracy: 65.48%
 <br/>
 
@@ -513,11 +511,11 @@ print("Precision: {:.2f}%".format(prec_check*100))
 print("Recall: {:.2f}%".format(recall_check*100))
 print(cf)
 ```
-Accuracy: 65.48%
-Precision: 66.07%
-Recall: 43.02%
-[[92 19]
- [49 37]]
+Accuracy: 65.48%  
+Precision: 66.07%  
+Recall: 43.02%  
+[92,   19]  
+ [49,   37]]
 <br/>
 
 <p align="justify"> This improved the accuracy to 65.48%. Now the model is starting to perform really well in comparison to where we started. We also have a good precision score of 66.07% and a recall score of 43.02%. </p>
@@ -526,7 +524,6 @@ Recall: 43.02%
 ## Feature Importance
 
 <p align="justify"> The feature importance attribute of the Random Forest classifier was used to find out which features were the most significant for the optimized model.  </p>
-<br/>
 
 ```python
 # Feature Importance
@@ -538,15 +535,13 @@ plt.xlabel('Importance')
 plt.ylabel('Features')
 plt.savefig('feature_importance.jpg')
 ```
-<br/>
+
 
 <p align="justify"> This produced the following chart: </p>
-<br/>
 
-# IMAGE
+![](EPL-Images/feature_importance.jpg)
 
 <p align="justify"> Interestingly, the most important feature was one of the variables for transfer market expenses. The next most importance features were possession, shot-creating actions, aerial battles won and shots on target against.  </p>
-<br/>
 
 <p align="justify"> Some of the least importance features were red cards, yellow cards, penalty kicks allowed and own goals. This may seem counter-intuitive, however it makes sense given the way the data was compiled. Even though a red card or penalty may even be the most important determinant of an outcome of the match in which it happens, it wouldn’t really have an significant impact on the following matches when computed as a moving average. Events such as own goals and red cards are also so rare that there isn’t much data available for our model.  </p>
 <br/>
@@ -554,7 +549,6 @@ plt.savefig('feature_importance.jpg')
 ## Running the Final Models
 
 <p align="justify"> After optimization the model can now be ran on the 2022/23 season, using the games that have been played so far as the test set. Unfortunately, given that we lost 3 games of the season due to the moving average function this is a small test set.  </p>
-<br/>
 
 ```python
 # Run Model on 2022/2023 Season
@@ -576,15 +570,18 @@ print("Precision: {:.2f}%".format(prec_check*100))
 print("Recall: {:.2f}%".format(recall_check*100))
 print(cf)
 ```
-<br/>
-
+Accuracy: 70.27%  
+Precision: 90.00%  
+Recall: 47.37%  
+[17,  1]  
+ [10,  9]  
+ 
 <p align="justify"> The result was very impressive with an accuracy of 70.27%. We also got a very high precision of 90% and a recall score of 47.37%. The relatively low recall score means that the model is predicting a large number of false negatives. This may be due to a slightly uneven dataset given that draws plus losses (0) outweighs wins (1). </p>
 <br/>
 
 ## XGBoost
 
 <p align="justify"> An XGBoost classifier was tested to see if we could outperform the Random Forest model. The same grid search was used to try to fine-tune the parameters of the boosted model.  </p>
-<br/>
 
 ```python
 # Try XGBoost Model
@@ -619,7 +616,7 @@ op_combination = combinations[score_index]
 print("Best Parameters: ", op_combination)
 print("Accuracy: {:.2f}%".format(max_score*100))
 ```
-Best Parameters:  {'learning_rate': 0.2, 'loss': 'exponential', 'min_samples_split': 5, 'n_estimators': 120, 'random_state': 1}
+Best Parameters:  {'learning_rate': 0.2, 'loss': 'exponential', 'min_samples_split': 5, 'n_estimators': 120, 'random_state': 1}  
 Accuracy: 72.97%
 <br/>
 
@@ -651,7 +648,7 @@ Recall: 78.95%
 
 # Conclusions
 
-<p align="justify">-  	Machine learning can used to successfully predict the outcomes of sports fixtures if good data is available. </p>
+<p align="justify">-  	Machine learning can used to successfully predict the outcomes of sports fixtures with a high degree of accuracy, if good data is available. </p>
 <p align="justify">-  	Web scraping is a very effective technique for creating datasets in order to predict the results of matches.  </p>
 <p align="justify">-  	There are many other complex strategies that could be used to try to beat the models in this project, for example scraping in-game data rather than using moving averages alone.  </p>
 <p align="justify">-  	Decision-tree and ensemble/boosted models are very effective at this type of predictive modelling, especially if the data contains categorical variables.  </p>

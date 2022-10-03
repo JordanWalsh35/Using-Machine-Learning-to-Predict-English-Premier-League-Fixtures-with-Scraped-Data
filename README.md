@@ -199,21 +199,24 @@ for df in dfx:
         if df[col].isnull().values.any():
             print(get_name(df), col)
 ```
-Output:  
-df18_19 SoT%  
-df18_19 G/SoT  
-df18_19 Avg. Distance of Shots  
-df18_19 Save%  
-df19_20 G/SoT  
-df19_20 Save%  
-df20_21 SoT%  
-df20_21 G/SoT  
-df20_21 Avg. Distance of Shots  
-df20_21 Save%  
-df21_22 G/SoT  
-df21_22 Save%  
-df22_23 G/SoT  
-df22_23 Save%  
+Output:
+
+| Season    | Variable         |
+|:---------:|:----------------:|
+| df18_19   | SoT%             |
+| df18_19   | G/SoT            |
+| df18_19   | Avg Dist of Shots|
+| df18_19   | Save%            |
+| df19_20   | G/SoT            |
+| df19_20   | Save%            |
+| df20_21   | SoT%             |
+| df20_21   | G/SoT            |
+| df20_21   | Avg Dist of Shots| 
+| df20_21   | Save%            |
+| df21_22   | G/SoT            |
+| df21_22   | Save%            |
+| df22_23   | G/SoT            |
+| df22_23   | Save%            |
 
 <p align="justify"> There was indeed some missing data but it can be deduced from the listed variables that contain missing entries that this was for technical reasons rather than data not being available. For example, in some matches a team may not take any shots and therefore could not have a value for Shot on Target (SoT) or Goals per Shot on Target (G/SoT). If this was the case then the values were simply imputed with a zero. The check was done again after imputation and found no missing values. </p>
 <br/>
